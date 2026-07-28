@@ -285,6 +285,53 @@
   background-image: linear-gradient(135deg, #ff2e3f 0%, #d31220 100%);
   box-shadow: 0 6px 18px -10px color-mix(in oklab, #ff2e3f 75%, transparent);
 }
+
+/* ---- Message "seen" system (delivered = red, seen = blue→violet) ---- */
+.ember-msg {
+  position: relative;
+  padding-bottom: 10px;
+  border-radius: 18px;
+}
+.ember-msg-unseen {
+  background-image: linear-gradient(160deg, rgba(255, 46, 63, 0.22) 0%, rgba(120, 8, 18, 0.28) 100%);
+  border: 1px solid rgba(255, 46, 63, 0.75);
+  box-shadow: 0 8px 26px -14px rgba(255, 46, 63, 0.9);
+}
+.ember-msg-seen {
+  background-image: linear-gradient(160deg, rgba(38, 132, 255, 0.2) 0%, rgba(120, 40, 200, 0.24) 100%);
+  border: 1px solid rgba(56, 160, 255, 0.75);
+  box-shadow: 0 8px 26px -14px rgba(56, 160, 255, 0.9);
+}
+/* Status line hugging the bottom curve of the bubble */
+.ember-msg-line {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 5px;
+  height: 3px;
+  border-radius: 999px;
+}
+.ember-msg-unseen .ember-msg-line {
+  background-image: linear-gradient(90deg, #ff2e3f 0%, #ff2e3f 100%);
+}
+.ember-msg-seen .ember-msg-line {
+  background-image: linear-gradient(90deg, #22d3ee 0%, #3b82f6 55%, #a855f7 100%);
+}
+.ember-msg-line::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: 50%;
+  height: 8px;
+  width: 8px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: currentColor;
+}
+.ember-msg-unseen .ember-msg-line::before { color: #ff2e3f; }
+.ember-msg-seen .ember-msg-line::before { color: #22d3ee; }
+.ember-msg-time-unseen { color: #ff5a67; }
+.ember-msg-time-seen { color: #4aa8ff; }
 .hub-bubble-theirs {
   background: #141418;
   border: 1px solid color-mix(in oklab, #ffffff 8%, transparent);
