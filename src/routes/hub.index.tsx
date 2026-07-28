@@ -204,6 +204,7 @@ function PrivateHub() {
   useEffect(() => {
     const savedName = localStorage.getItem(NAME_KEY);
     if (savedName) setName(savedName);
+    if (savedName) nameRef.current = savedName;
     const savedRoom = localStorage.getItem(ROOM_KEY);
     if (savedRoom) {
       setRoom(savedRoom);
