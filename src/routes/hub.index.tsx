@@ -860,7 +860,9 @@ function PrivateHub() {
             ].map((p) => (
               <button
                 key={p.key}
-                onClick={() => navigate({ to: "/hub/status" })}
+                onClick={() =>
+                  p.key === "you" ? setDpOpen(true) : navigate({ to: "/hub/status" })
+                }
                 className="flex w-[58px] shrink-0 flex-col items-center gap-1.5"
               >
                 <span className={`ember-ring ${p.ring ? "" : "ember-ring-seen"} block`}>
