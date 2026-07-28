@@ -11,9 +11,9 @@ import heroBg from "@/assets/library-hero.jpg";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "N-2" },
+      { title: "N-3" },
       { name: "description", content: "Discover, read and collect timeless classics. NEALTH brings the world's great books to your pocket." },
-      { property: "og:title", content: "N-2" },
+      { property: "og:title", content: "N-3" },
       { property: "og:description", content: "Discover, read and collect timeless classics. NEALTH brings the world's great books to your pocket." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
