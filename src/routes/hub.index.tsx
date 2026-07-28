@@ -36,6 +36,7 @@ import {
 } from "@/lib/msg-meta";
 import { MessageActionSheet } from "@/components/MessageActionSheet";
 import { buildPartnerSeenSet, buildSeenSet, encodeSeen, isSeenMark } from "@/lib/seen";
+import { isCoverEnabled, setCoverEnabled } from "@/lib/cover";
 
 export const Route = createFileRoute("/hub/")({
   validateSearch: (s: Record<string, unknown>): { chat?: "1" } => ({
@@ -179,6 +180,11 @@ function PrivateHub() {
   // remounting the component or resetting any chat state).
   const openRoom = () => navigate({ to: "/hub", search: { chat: "1" } });
   const backToInbox = () => navigate({ to: "/hub", search: {} });
+
+  // Read the per-device novel-cover preference once on mount.
+  useEffect(() => {
+    setCoverOn(isCoverEnabled());
+  }, []);
 
   // Tick every second so the "Active Xs ago" label stays live without refresh.
   useEffect(() => {
