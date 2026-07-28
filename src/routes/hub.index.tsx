@@ -1042,6 +1042,7 @@ function PrivateHub() {
           const edited = !deleted && isEdited(m.content);
           const displayBody = edited ? stripEdit(body) : body;
           const mediaPayload = !deleted && isMedia(displayBody) ? decodeMedia(displayBody) : null;
+          const seenByPartner = mine && theirSeen.has(m.id);
           return (
             <div
               key={m.id}
@@ -1053,10 +1054,10 @@ function PrivateHub() {
               onContextMenu={(e) => { e.preventDefault(); if (!deleted) setActionMsg(m); }}
             >
               <div
-                className={`max-w-[78%] rounded-2xl px-2.5 py-1.5 text-[13px] ${
+                className={`max-w-[78%] px-3 py-2 text-[13px] ${
                   mine
-                    ? "hub-bubble-mine rounded-br-sm text-white"
-                    : "hub-bubble-theirs rounded-bl-sm text-foreground"
+                    ? `ember-msg text-white ${seenByPartner ? "ember-msg-seen" : "ember-msg-unseen"}`
+                    : "hub-bubble-theirs rounded-2xl rounded-bl-sm text-foreground"
                 }`}
                 style={
                   dragging
@@ -1083,14 +1084,18 @@ function PrivateHub() {
                   <p className="whitespace-pre-wrap break-words">{displayBody}</p>
                 )}
                 <span
-                  className={`mt-0.5 flex items-center justify-end gap-1 text-[9px] ${
-                    mine ? "text-white/70" : "text-muted-foreground"
+                  className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] font-medium ${
+                    mine
+                      ? seenByPartner
+                        ? "ember-msg-time-seen"
+                        : "ember-msg-time-unseen"
+                      : "text-muted-foreground"
                   }`}
                 >
                   {edited && <span className="italic opacity-70">edited</span>}
                   {formatIST(m.created_at)}
-                {mine && <Ticks read={!!m.read_at} delivered={partnerSubscribed || partnerOnline} />}
                 </span>
+                {mine && <span className="ember-msg-line" aria-hidden />}
               </div>
             </div>
           );
