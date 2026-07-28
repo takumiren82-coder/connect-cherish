@@ -303,30 +303,42 @@ function PrivateHub() {
     }
   };
 
-  // mark partner messages as read when I'm actively viewing the chat room
+  // ---- Seen receipts -----------------------------------------------------
+  // `mySeen`  = ids I have acknowledged (drives my unread badge)
+  // `theirSeen` = ids the partner acknowledged (drives blue line on my msgs)
+  const mySeen = useMemo(() => buildSeenSet(messages, myId), [messages, myId]);
+  const theirSeen = useMemo(() => buildPartnerSeenSet(messages, myId), [messages, myId]);
+
+  const isRealMsg = useCallback(
+    (m: Message) =>
+      !m.content.startsWith(JOIN_MARK) &&
+      !isSeenMark(m.content) &&
+      !isDp(m.content) &&
+      !isStatusLike(m.content) &&
+      !isDeleted(m.content) &&
+      !deletedForMe.has(m.id),
+    [deletedForMe],
+  );
+
+  // Acknowledge partner messages while I'm actively viewing the chat room.
+  const ackInFlight = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!room || !openChat) return;
-    const unread = messages.filter(
-      (m) =>
-        m.sender !== myId &&
-        !m.read_at &&
-        !m.content.startsWith(JOIN_MARK) &&
-        !isDp(m.content) &&
-        !isDeleted(m.content) &&
-        !deletedForMe.has(m.id),
-    );
-    if (unread.length === 0) return;
+    const pending = messages
+      .filter((m) => m.sender !== myId && isRealMsg(m) && !mySeen.has(m.id) && !ackInFlight.current.has(m.id))
+      .map((m) => m.id);
+    if (pending.length === 0) return;
+    pending.forEach((id) => ackInFlight.current.add(id));
     supabase
       .from("messages")
-      .update({ read_at: new Date().toISOString() })
-      .in(
-        "id",
-        unread.map((m) => m.id),
-      )
+      .insert({ room_code: room, sender: myId, content: encodeSeen(pending) })
       .then(({ error }) => {
-        if (error) console.error("Mark read failed:", error.message);
+        if (error) {
+          pending.forEach((id) => ackInFlight.current.delete(id));
+          console.error("Seen receipt failed:", error.message);
+        }
       });
-  }, [messages, room, myId, openChat]);
+  }, [messages, room, myId, openChat, mySeen, isRealMsg]);
 
   // derive partner presence + name from join markers / any partner message
   const { partnerPresent, partnerName, visibleMessages } = useMemo(() => {
