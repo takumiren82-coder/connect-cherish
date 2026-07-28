@@ -260,10 +260,19 @@ function PrivateHub() {
         const state = channel.presenceState() as Record<string, unknown>;
         const others = Object.keys(state).filter((k) => k !== myId);
         setPartnerSubscribed(others.length > 0);
+        // Pick up the partner's display name straight from presence.
+        for (const k of others) {
+          const entries = (state as Record<string, Array<{ name?: string }>>)[k] ?? [];
+          const n = entries.find((e) => e?.name)?.name?.trim();
+          if (n) {
+            setPresenceName(n);
+            break;
+          }
+        }
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          await channel.track({ user: myId, at: Date.now() });
+          await channel.track({ user: myId, name: nameRef.current, at: Date.now() });
         }
       });
 
@@ -282,6 +291,9 @@ function PrivateHub() {
   // announce presence + name once per room
   useEffect(() => {
     if (!room || !name) return;
+    nameRef.current = name;
+    // Re-publish my name on the presence channel so the partner sees it live.
+    channelRef.current?.track({ user: myId, name, at: Date.now() });
     if (announced.current === room) return;
     announced.current = room;
     supabase
@@ -384,12 +396,13 @@ function PrivateHub() {
     if (room) setSavedPartner(localStorage.getItem(`nealth_partner_${room}`) ?? "");
   }, [room]);
   useEffect(() => {
-    if (room && partnerName) {
-      localStorage.setItem(`nealth_partner_${room}`, partnerName);
-      setSavedPartner(partnerName);
+    const n = partnerName || presenceName;
+    if (room && n) {
+      localStorage.setItem(`nealth_partner_${room}`, n);
+      setSavedPartner(n);
     }
-  }, [room, partnerName]);
-  const displayName = partnerName || savedPartner || "Partner";
+  }, [room, partnerName, presenceName]);
+  const displayName = partnerName || presenceName || savedPartner || "Partner";
 
   // Restore cached DPs immediately so avatars show on reload before
   // realtime messages sync.
