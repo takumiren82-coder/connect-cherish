@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { isDp } from "@/lib/dp";
 import { isDeleted, isStatusLike } from "@/lib/msg-meta";
+import { buildSeenSet, isSeenMark } from "@/lib/seen";
 import { ROOM_KEY, UID_KEY } from "@/lib/identity";
 
 // Matches the private join-marker sentinel used in hub.index.tsx.
@@ -11,13 +12,13 @@ interface Row {
   id: string;
   sender: string;
   content: string;
-  read_at: string | null;
 }
 
 /**
  * Live unread count for the current room + device identity.
- * Counts only messages FROM the partner that the current user hasn't
- * marked as read yet. Filters out presence/DP/deleted/status-like sentinels.
+ * Counts only messages FROM the partner that I have not acknowledged with a
+ * "seen" receipt yet. Sentinel rows (join / DP / seen / status / deleted)
+ * never count.
  */
 export function useUnreadCount(): number {
   const [count, setCount] = useState(0);
@@ -33,23 +34,24 @@ export function useUnreadCount(): number {
     const refresh = async () => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, sender, content, read_at")
-        .eq("room_code", room)
-        .is("read_at", null);
+        .select("id, sender, content")
+        .eq("room_code", room);
       if (!live || error || !data) return;
       const rows = data as Row[];
+      const seen = buildSeenSet(rows, myId);
       const c = rows.reduce((acc, m) => {
         if (m.sender === myId) return acc;
         const content = m.content ?? "";
         if (
           content.startsWith(JOIN_MARK) ||
+          isSeenMark(content) ||
           isDp(content) ||
           isDeleted(content) ||
           isStatusLike(content)
         ) {
           return acc;
         }
-        return acc + 1;
+        return seen.has(m.id) ? acc : acc + 1;
       }, 0);
       setCount(c);
     };

@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Plus, Send, ArrowLeft, Phone, Video, Copy, Check, CheckCheck, X, Smile, Mic, MoreVertical, Camera, Search, Flame } from "lucide-react";
+import { Plus, Send, ArrowLeft, Phone, Video, Copy, Check, X, Smile, Mic, MoreVertical, Camera, Search, Flame } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { BottomNav } from "@/components/BottomNav";
 import { AttachSheet, type ViewChoice } from "@/components/AttachSheet";
@@ -124,7 +124,7 @@ function PrivateHub() {
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSent = useRef(0);
   // Presence-derived: is the partner currently subscribed to the room channel?
-  const [partnerSubscribed, setPartnerSubscribed] = useState(false);
+  const [, setPartnerSubscribed] = useState(false);
   // Media / emoji / camera / voice / call UI state
   const [attachOpen, setAttachOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -1252,13 +1252,6 @@ function PrivateHub() {
 
 export function Avatar({ name, url, size = 44 }: { name: string; url: string | null; size?: number }) {
   return <AvatarImpl name={name} url={url} size={size} />;
-}
-
-function Ticks({ read, delivered }: { read: boolean; delivered: boolean }) {
-  // Double BLUE = read, double faded = delivered, single faded = sent
-  if (read) return <CheckCheck className="h-3 w-3 text-sky-400" />;
-  if (delivered) return <CheckCheck className="h-3 w-3 opacity-70" />;
-  return <Check className="h-3 w-3 opacity-70" />;
 }
 
 function AvatarImpl({ name, url, size = 44 }: { name: string; url: string | null; size?: number }) {
