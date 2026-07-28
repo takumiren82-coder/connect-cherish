@@ -12,13 +12,26 @@ export const encodeDp = (url: string) => DP_MARK + url;
 export const decodeDp = (content: string) => content.slice(DP_MARK.length);
 
 export async function uploadDp(room: string, userId: string, file: File): Promise<string> {
+  // Read the file as a data URL first — this always works, even if the
+  // storage bucket is missing or blocked by policy, so the DP never fails.
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(new Error("Could not read that image."));
+    r.readAsDataURL(file);
+  });
   const path = `dp/${room}/${userId}-${Date.now()}.jpg`;
-  const up = await supabase.storage
-    .from(DP_BUCKET)
-    .upload(path, file, { upsert: true, contentType: "image/jpeg" });
-  if (up.error) throw up.error;
-  const { data } = supabase.storage.from(DP_BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+  try {
+    const up = await supabase.storage
+      .from(DP_BUCKET)
+      .upload(path, file, { upsert: true, contentType: "image/jpeg" });
+    if (up.error) throw up.error;
+    const { data } = supabase.storage.from(DP_BUCKET).getPublicUrl(path);
+    if (data?.publicUrl) return data.publicUrl;
+  } catch {
+    // fall through to the inline data URL
+  }
+  return dataUrl;
 }
 
 export async function broadcastDp(room: string, userId: string, url: string) {

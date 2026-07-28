@@ -35,6 +35,7 @@ import {
   type ReplyRef,
 } from "@/lib/msg-meta";
 import { MessageActionSheet } from "@/components/MessageActionSheet";
+import { AvatarPicker } from "@/components/AvatarPicker";
 import { buildPartnerSeenSet, buildSeenSet, encodeSeen, isSeenMark } from "@/lib/seen";
 import { isCoverEnabled, setCoverEnabled } from "@/lib/cover";
 
@@ -138,6 +139,10 @@ function PrivateHub() {
   >(null);
   const [myDp, setMyDp] = useState<string>("");
   const [partnerDp, setPartnerDp] = useState<string>("");
+  const [dpOpen, setDpOpen] = useState(false);
+  // Partner name learned live from the presence channel (works even when the
+  // hidden join marker row never arrived).
+  const [presenceName, setPresenceName] = useState<string>("");
   // Swipe-to-reply + reply preview state
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [swipeId, setSwipeId] = useState<string | null>(null);
@@ -157,6 +162,9 @@ function PrivateHub() {
   const [searchText, setSearchText] = useState("");
   const [fabOpen, setFabOpen] = useState(false);
   const [coverOn, setCoverOn] = useState(true);
+  // Always-fresh copy of my own name for the presence payload, so the
+  // realtime channel doesn't need to resubscribe when the name loads.
+  const nameRef = useRef<string>("");
 
   // Pending reply-ref stashed by the Status page's "Comment" button. Load it
   // once when the chat room is opened so tapping Comment on a status opens
@@ -196,6 +204,7 @@ function PrivateHub() {
   useEffect(() => {
     const savedName = localStorage.getItem(NAME_KEY);
     if (savedName) setName(savedName);
+    if (savedName) nameRef.current = savedName;
     const savedRoom = localStorage.getItem(ROOM_KEY);
     if (savedRoom) {
       setRoom(savedRoom);
@@ -252,10 +261,19 @@ function PrivateHub() {
         const state = channel.presenceState() as Record<string, unknown>;
         const others = Object.keys(state).filter((k) => k !== myId);
         setPartnerSubscribed(others.length > 0);
+        // Pick up the partner's display name straight from presence.
+        for (const k of others) {
+          const entries = (state as Record<string, Array<{ name?: string }>>)[k] ?? [];
+          const n = entries.find((e) => e?.name)?.name?.trim();
+          if (n) {
+            setPresenceName(n);
+            break;
+          }
+        }
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          await channel.track({ user: myId, at: Date.now() });
+          await channel.track({ user: myId, name: nameRef.current, at: Date.now() });
         }
       });
 
@@ -274,6 +292,9 @@ function PrivateHub() {
   // announce presence + name once per room
   useEffect(() => {
     if (!room || !name) return;
+    nameRef.current = name;
+    // Re-publish my name on the presence channel so the partner sees it live.
+    channelRef.current?.track({ user: myId, name, at: Date.now() });
     if (announced.current === room) return;
     announced.current = room;
     supabase
@@ -376,12 +397,13 @@ function PrivateHub() {
     if (room) setSavedPartner(localStorage.getItem(`nealth_partner_${room}`) ?? "");
   }, [room]);
   useEffect(() => {
-    if (room && partnerName) {
-      localStorage.setItem(`nealth_partner_${room}`, partnerName);
-      setSavedPartner(partnerName);
+    const n = partnerName || presenceName;
+    if (room && n) {
+      localStorage.setItem(`nealth_partner_${room}`, n);
+      setSavedPartner(n);
     }
-  }, [room, partnerName]);
-  const displayName = partnerName || savedPartner || "Partner";
+  }, [room, partnerName, presenceName]);
+  const displayName = partnerName || presenceName || savedPartner || "Partner";
 
   // Restore cached DPs immediately so avatars show on reload before
   // realtime messages sync.
@@ -838,7 +860,9 @@ function PrivateHub() {
             ].map((p) => (
               <button
                 key={p.key}
-                onClick={() => navigate({ to: "/hub/status" })}
+                onClick={() =>
+                  p.key === "you" ? setDpOpen(true) : navigate({ to: "/hub/status" })
+                }
                 className="flex w-[58px] shrink-0 flex-col items-center gap-1.5"
               >
                 <span className={`ember-ring ${p.ring ? "" : "ember-ring-seen"} block`}>
@@ -975,6 +999,17 @@ function PrivateHub() {
                 Open chat
               </button>
 
+              <button
+                onClick={() => {
+                  setFabOpen(false);
+                  setDpOpen(true);
+                }}
+                className="flex w-full items-center gap-3 rounded-xl px-2 py-3 text-left text-[14px] text-foreground hover:bg-secondary/50"
+              >
+                <Camera className="h-4 w-4 text-gold" />
+                Change profile picture
+              </button>
+
               <div className="mt-2 rounded-xl border border-border/60 px-3 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
@@ -1010,6 +1045,14 @@ function PrivateHub() {
         )}
         <div className="h-16 shrink-0" />
         <BottomNav active="chats" />
+        {dpOpen && (
+          <AvatarPicker
+            currentUrl={myDp || null}
+            onClose={() => setDpOpen(false)}
+            onSave={saveDp}
+            onDelete={myDp ? removeDp : undefined}
+          />
+        )}
       </div>
     );
   }
