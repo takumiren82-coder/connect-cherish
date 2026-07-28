@@ -349,6 +349,7 @@ function PrivateHub() {
       const isJoin = m.content.startsWith(JOIN_MARK);
       const dpMsg = isDp(m.content);
       const likeMsg = isStatusLike(m.content);
+      const seenMsg = isSeenMark(m.content);
       if (m.sender !== myId) {
         present = true;
         if (isJoin) {
@@ -356,7 +357,7 @@ function PrivateHub() {
           if (n) pName = n;
         }
       }
-      if (!isJoin && !dpMsg && !likeMsg && !deletedForMe.has(m.id)) visible.push(m);
+      if (!isJoin && !dpMsg && !likeMsg && !seenMsg && !deletedForMe.has(m.id)) visible.push(m);
     }
     return { partnerPresent: present, partnerName: pName, visibleMessages: visible };
   }, [messages, myId, deletedForMe]);
