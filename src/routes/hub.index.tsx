@@ -999,6 +999,17 @@ function PrivateHub() {
                 Open chat
               </button>
 
+              <button
+                onClick={() => {
+                  setFabOpen(false);
+                  setDpOpen(true);
+                }}
+                className="flex w-full items-center gap-3 rounded-xl px-2 py-3 text-left text-[14px] text-foreground hover:bg-secondary/50"
+              >
+                <Camera className="h-4 w-4 text-gold" />
+                Change profile picture
+              </button>
+
               <div className="mt-2 rounded-xl border border-border/60 px-3 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
