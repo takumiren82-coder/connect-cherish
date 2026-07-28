@@ -1045,6 +1045,14 @@ function PrivateHub() {
         )}
         <div className="h-16 shrink-0" />
         <BottomNav active="chats" />
+        {dpOpen && (
+          <AvatarPicker
+            currentUrl={myDp || null}
+            onClose={() => setDpOpen(false)}
+            onSave={saveDp}
+            onDelete={myDp ? removeDp : undefined}
+          />
+        )}
       </div>
     );
   }
