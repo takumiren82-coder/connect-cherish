@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Plus, Send, ArrowLeft, Phone, Video, Copy, Check, CheckCheck, X, Smile, Mic, MoreVertical, Camera, Search, Flame } from "lucide-react";
+import { Plus, Send, ArrowLeft, Phone, Video, Copy, Check, X, Smile, Mic, MoreVertical, Camera, Search, Flame } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { BottomNav } from "@/components/BottomNav";
 import { AttachSheet, type ViewChoice } from "@/components/AttachSheet";
@@ -35,6 +35,7 @@ import {
   type ReplyRef,
 } from "@/lib/msg-meta";
 import { MessageActionSheet } from "@/components/MessageActionSheet";
+import { buildPartnerSeenSet, buildSeenSet, encodeSeen, isSeenMark } from "@/lib/seen";
 
 export const Route = createFileRoute("/hub/")({
   validateSearch: (s: Record<string, unknown>): { chat?: "1" } => ({
@@ -123,7 +124,7 @@ function PrivateHub() {
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSent = useRef(0);
   // Presence-derived: is the partner currently subscribed to the room channel?
-  const [partnerSubscribed, setPartnerSubscribed] = useState(false);
+  const [, setPartnerSubscribed] = useState(false);
   // Media / emoji / camera / voice / call UI state
   const [attachOpen, setAttachOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -302,30 +303,42 @@ function PrivateHub() {
     }
   };
 
-  // mark partner messages as read when I'm actively viewing the chat room
+  // ---- Seen receipts -----------------------------------------------------
+  // `mySeen`  = ids I have acknowledged (drives my unread badge)
+  // `theirSeen` = ids the partner acknowledged (drives blue line on my msgs)
+  const mySeen = useMemo(() => buildSeenSet(messages, myId), [messages, myId]);
+  const theirSeen = useMemo(() => buildPartnerSeenSet(messages, myId), [messages, myId]);
+
+  const isRealMsg = useCallback(
+    (m: Message) =>
+      !m.content.startsWith(JOIN_MARK) &&
+      !isSeenMark(m.content) &&
+      !isDp(m.content) &&
+      !isStatusLike(m.content) &&
+      !isDeleted(m.content) &&
+      !deletedForMe.has(m.id),
+    [deletedForMe],
+  );
+
+  // Acknowledge partner messages while I'm actively viewing the chat room.
+  const ackInFlight = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!room || !openChat) return;
-    const unread = messages.filter(
-      (m) =>
-        m.sender !== myId &&
-        !m.read_at &&
-        !m.content.startsWith(JOIN_MARK) &&
-        !isDp(m.content) &&
-        !isDeleted(m.content) &&
-        !deletedForMe.has(m.id),
-    );
-    if (unread.length === 0) return;
+    const pending = messages
+      .filter((m) => m.sender !== myId && isRealMsg(m) && !mySeen.has(m.id) && !ackInFlight.current.has(m.id))
+      .map((m) => m.id);
+    if (pending.length === 0) return;
+    pending.forEach((id) => ackInFlight.current.add(id));
     supabase
       .from("messages")
-      .update({ read_at: new Date().toISOString() })
-      .in(
-        "id",
-        unread.map((m) => m.id),
-      )
+      .insert({ room_code: room, sender: myId, content: encodeSeen(pending) })
       .then(({ error }) => {
-        if (error) console.error("Mark read failed:", error.message);
+        if (error) {
+          pending.forEach((id) => ackInFlight.current.delete(id));
+          console.error("Seen receipt failed:", error.message);
+        }
       });
-  }, [messages, room, myId, openChat]);
+  }, [messages, room, myId, openChat, mySeen, isRealMsg]);
 
   // derive partner presence + name from join markers / any partner message
   const { partnerPresent, partnerName, visibleMessages } = useMemo(() => {
@@ -336,6 +349,7 @@ function PrivateHub() {
       const isJoin = m.content.startsWith(JOIN_MARK);
       const dpMsg = isDp(m.content);
       const likeMsg = isStatusLike(m.content);
+      const seenMsg = isSeenMark(m.content);
       if (m.sender !== myId) {
         present = true;
         if (isJoin) {
@@ -343,7 +357,7 @@ function PrivateHub() {
           if (n) pName = n;
         }
       }
-      if (!isJoin && !dpMsg && !likeMsg && !deletedForMe.has(m.id)) visible.push(m);
+      if (!isJoin && !dpMsg && !likeMsg && !seenMsg && !deletedForMe.has(m.id)) visible.push(m);
     }
     return { partnerPresent: present, partnerName: pName, visibleMessages: visible };
   }, [messages, myId, deletedForMe]);
@@ -751,14 +765,9 @@ function PrivateHub() {
   // ---- Step 4a: inbox / chat list (default landing for the Chat tab) ----
   if (!openChat) {
     const last = visibleMessages[visibleMessages.length - 1];
+    // Only the PARTNER's messages that I have not acknowledged yet.
     const unread = messages.filter(
-      (m) =>
-        m.sender !== myId &&
-        !m.read_at &&
-        !m.content.startsWith(JOIN_MARK) &&
-        !isDp(m.content) &&
-        !isDeleted(m.content) &&
-        !deletedForMe.has(m.id),
+      (m) => m.sender !== myId && isRealMsg(m) && !mySeen.has(m.id),
     ).length;
     const preview = partnerTyping
       ? "Typing…"
@@ -1033,6 +1042,7 @@ function PrivateHub() {
           const edited = !deleted && isEdited(m.content);
           const displayBody = edited ? stripEdit(body) : body;
           const mediaPayload = !deleted && isMedia(displayBody) ? decodeMedia(displayBody) : null;
+          const seenByPartner = mine && theirSeen.has(m.id);
           return (
             <div
               key={m.id}
@@ -1044,10 +1054,10 @@ function PrivateHub() {
               onContextMenu={(e) => { e.preventDefault(); if (!deleted) setActionMsg(m); }}
             >
               <div
-                className={`max-w-[78%] rounded-2xl px-2.5 py-1.5 text-[13px] ${
+                className={`max-w-[78%] px-3 py-2 text-[13px] ${
                   mine
-                    ? "hub-bubble-mine rounded-br-sm text-white"
-                    : "hub-bubble-theirs rounded-bl-sm text-foreground"
+                    ? `ember-msg text-white ${seenByPartner ? "ember-msg-seen" : "ember-msg-unseen"}`
+                    : "hub-bubble-theirs rounded-2xl rounded-bl-sm text-foreground"
                 }`}
                 style={
                   dragging
@@ -1074,14 +1084,18 @@ function PrivateHub() {
                   <p className="whitespace-pre-wrap break-words">{displayBody}</p>
                 )}
                 <span
-                  className={`mt-0.5 flex items-center justify-end gap-1 text-[9px] ${
-                    mine ? "text-white/70" : "text-muted-foreground"
+                  className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] font-medium ${
+                    mine
+                      ? seenByPartner
+                        ? "ember-msg-time-seen"
+                        : "ember-msg-time-unseen"
+                      : "text-muted-foreground"
                   }`}
                 >
                   {edited && <span className="italic opacity-70">edited</span>}
                   {formatIST(m.created_at)}
-                {mine && <Ticks read={!!m.read_at} delivered={partnerSubscribed || partnerOnline} />}
                 </span>
+                {mine && <span className="ember-msg-line" aria-hidden />}
               </div>
             </div>
           );
@@ -1238,13 +1252,6 @@ function PrivateHub() {
 
 export function Avatar({ name, url, size = 44 }: { name: string; url: string | null; size?: number }) {
   return <AvatarImpl name={name} url={url} size={size} />;
-}
-
-function Ticks({ read, delivered }: { read: boolean; delivered: boolean }) {
-  // Double BLUE = read, double faded = delivered, single faded = sent
-  if (read) return <CheckCheck className="h-3 w-3 text-sky-400" />;
-  if (delivered) return <CheckCheck className="h-3 w-3 opacity-70" />;
-  return <Check className="h-3 w-3 opacity-70" />;
 }
 
 function AvatarImpl({ name, url, size = 44 }: { name: string; url: string | null; size?: number }) {
