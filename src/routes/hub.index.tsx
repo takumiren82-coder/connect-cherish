@@ -154,6 +154,8 @@ function PrivateHub() {
   const [inboxFilter, setInboxFilter] = useState("All");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [fabOpen, setFabOpen] = useState(false);
+  const [coverOn, setCoverOn] = useState(true);
 
   // Pending reply-ref stashed by the Status page's "Comment" button. Load it
   // once when the chat room is opened so tapping Comment on a status opens
