@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Menu, Search, Sparkles, Plus } from "lucide-react";
 import { books, type Book } from "@/data/books";
@@ -6,6 +6,8 @@ import { PublicNav } from "@/components/PublicNav";
 import { PassportSearch } from "@/components/PassportSearch";
 import { useAuth, getGreeting, displayName, avatarUrl } from "@/lib/auth";
 import { getAllProgress, getBookmarks } from "@/lib/progress";
+import { isCoverEnabled } from "@/lib/cover";
+import { useAccess } from "@/lib/access-context";
 import heroBg from "@/assets/library-hero.jpg";
 
 export const Route = createFileRoute("/")({
@@ -32,9 +34,22 @@ const CATEGORIES = [
 
 function Home() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const { grantAccess } = useAccess();
+  const [bypass, setBypass] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [featIdx, setFeatIdx] = useState(0);
   const featured = books.slice(0, 3);
+
+  // If the user turned the novel cover OFF on this device, skip the public
+  // site entirely and open the private hub directly.
+  useEffect(() => {
+    if (!isCoverEnabled()) {
+      setBypass(true);
+      grantAccess();
+      navigate({ to: "/hub", replace: true });
+    }
+  }, [grantAccess, navigate]);
 
   useEffect(() => {
     const t = setInterval(() => setFeatIdx((i) => (i + 1) % featured.length), 6000);
@@ -50,6 +65,8 @@ function Home() {
   const bookmarks = getBookmarks(uid);
   const recommended = books.filter((b) => !progress[b.id]).slice(0, 8);
   const feat = featured[featIdx];
+
+  if (bypass) return null;
 
   return (
     <div className="relative min-h-screen bg-[#0a0a0f] pb-24 font-body text-neutral-100">
