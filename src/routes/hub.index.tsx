@@ -765,14 +765,9 @@ function PrivateHub() {
   // ---- Step 4a: inbox / chat list (default landing for the Chat tab) ----
   if (!openChat) {
     const last = visibleMessages[visibleMessages.length - 1];
+    // Only the PARTNER's messages that I have not acknowledged yet.
     const unread = messages.filter(
-      (m) =>
-        m.sender !== myId &&
-        !m.read_at &&
-        !m.content.startsWith(JOIN_MARK) &&
-        !isDp(m.content) &&
-        !isDeleted(m.content) &&
-        !deletedForMe.has(m.id),
+      (m) => m.sender !== myId && isRealMsg(m) && !mySeen.has(m.id),
     ).length;
     const preview = partnerTyping
       ? "Typing…"
