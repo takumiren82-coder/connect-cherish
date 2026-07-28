@@ -35,6 +35,7 @@ import {
   type ReplyRef,
 } from "@/lib/msg-meta";
 import { MessageActionSheet } from "@/components/MessageActionSheet";
+import { buildPartnerSeenSet, buildSeenSet, encodeSeen, isSeenMark } from "@/lib/seen";
 
 export const Route = createFileRoute("/hub/")({
   validateSearch: (s: Record<string, unknown>): { chat?: "1" } => ({
