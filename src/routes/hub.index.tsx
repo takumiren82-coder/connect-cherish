@@ -946,13 +946,68 @@ function PrivateHub() {
 
         {/* FAB */}
         <button
-          onClick={openRoom}
-          aria-label="New chat"
+          onClick={() => setFabOpen(true)}
+          aria-label="New chat and settings"
           className="fixed bottom-[86px] right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-[0_10px_28px_-8px_rgba(255,46,63,0.8)]"
           style={{ background: "linear-gradient(135deg,#ff2e3f 0%,#d31220 100%)" }}
         >
           <Plus className="h-6 w-6" strokeWidth={2.4} />
         </button>
+
+        {fabOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-end bg-black/60 backdrop-blur-sm"
+            onClick={() => setFabOpen(false)}
+          >
+            <div
+              className="w-full rounded-t-3xl border-t border-border/60 bg-card px-5 pb-8 pt-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border" />
+              <button
+                onClick={() => {
+                  setFabOpen(false);
+                  openRoom();
+                }}
+                className="flex w-full items-center gap-3 rounded-xl px-2 py-3 text-left text-[14px] text-foreground hover:bg-secondary/50"
+              >
+                <Send className="h-4 w-4 text-gold" />
+                Open chat
+              </button>
+
+              <div className="mt-2 rounded-xl border border-border/60 px-3 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[14px] font-semibold text-foreground">Novel cover</p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                      On: app opens on the NEALTH novel site and this chat stays hidden behind the
+                      passport. Off: the app opens straight into chat.
+                    </p>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={coverOn}
+                    aria-label="Novel cover"
+                    onClick={() => {
+                      const next = !coverOn;
+                      setCoverOn(next);
+                      setCoverEnabled(next);
+                    }}
+                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                      coverOn ? "bg-primary" : "bg-border"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
+                        coverOn ? "left-[22px]" : "left-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="h-16 shrink-0" />
         <BottomNav active="chats" />
       </div>
