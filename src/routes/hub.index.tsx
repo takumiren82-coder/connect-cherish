@@ -35,6 +35,7 @@ import {
   type ReplyRef,
 } from "@/lib/msg-meta";
 import { MessageActionSheet } from "@/components/MessageActionSheet";
+import { AvatarPicker } from "@/components/AvatarPicker";
 import { buildPartnerSeenSet, buildSeenSet, encodeSeen, isSeenMark } from "@/lib/seen";
 import { isCoverEnabled, setCoverEnabled } from "@/lib/cover";
 
@@ -138,6 +139,10 @@ function PrivateHub() {
   >(null);
   const [myDp, setMyDp] = useState<string>("");
   const [partnerDp, setPartnerDp] = useState<string>("");
+  const [dpOpen, setDpOpen] = useState(false);
+  // Partner name learned live from the presence channel (works even when the
+  // hidden join marker row never arrived).
+  const [presenceName, setPresenceName] = useState<string>("");
   // Swipe-to-reply + reply preview state
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [swipeId, setSwipeId] = useState<string | null>(null);
@@ -157,6 +162,9 @@ function PrivateHub() {
   const [searchText, setSearchText] = useState("");
   const [fabOpen, setFabOpen] = useState(false);
   const [coverOn, setCoverOn] = useState(true);
+  // Always-fresh copy of my own name for the presence payload, so the
+  // realtime channel doesn't need to resubscribe when the name loads.
+  const nameRef = useRef<string>("");
 
   // Pending reply-ref stashed by the Status page's "Comment" button. Load it
   // once when the chat room is opened so tapping Comment on a status opens
