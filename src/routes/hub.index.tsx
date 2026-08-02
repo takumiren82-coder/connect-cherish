@@ -36,6 +36,8 @@ import {
 } from "@/lib/msg-meta";
 import { MessageActionSheet } from "@/components/MessageActionSheet";
 import { AvatarPicker } from "@/components/AvatarPicker";
+import { Buffering } from "@/components/Buffering";
+import { readMsgCache, writeMsgCache } from "@/lib/msg-cache";
 import { buildPartnerSeenSet, buildSeenSet, encodeSeen, isSeenMark } from "@/lib/seen";
 import { isCoverEnabled, setCoverEnabled } from "@/lib/cover";
 
@@ -162,6 +164,8 @@ function PrivateHub() {
   const [searchText, setSearchText] = useState("");
   const [fabOpen, setFabOpen] = useState(false);
   const [coverOn, setCoverOn] = useState(true);
+  // True only while the first (uncached) transcript fetch is in flight.
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
   // Always-fresh copy of my own name for the presence payload, so the
   // realtime channel doesn't need to resubscribe when the name loads.
   const nameRef = useRef<string>("");
