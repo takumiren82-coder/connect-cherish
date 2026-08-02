@@ -4,7 +4,7 @@ import lockKey from "@/assets/lock-key.png";
 export function PrivateHubTransition({ onComplete }: { onComplete?: () => void }) {
   useEffect(() => {
     if (!onComplete) return;
-    const t = setTimeout(onComplete, 3000);
+    const t = setTimeout(onComplete, 900);
     return () => clearTimeout(t);
   }, [onComplete]);
 

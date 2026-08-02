@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Search, X, KeyRound } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Search, X, KeyRound, Loader2 } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/lib/supabase";
 import { useAccess } from "@/lib/access-context";
@@ -21,6 +21,11 @@ export function PassportSearch({ onClose }: { onClose: () => void }) {
   const [showSecond, setShowSecond] = useState(false);
   const [second, setSecond] = useState("");
   const [entering, setEntering] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // Remembers codes already checked so repeat keystrokes never re-hit the
+  // network — the second popup then appears instantly.
+  const firstCache = useRef<Map<string, boolean>>(new Map());
+  const checking = useRef<string | null>(null);
 
   const results = query.trim()
     ? books
@@ -33,20 +38,52 @@ export function PassportSearch({ onClose }: { onClose: () => void }) {
   const checkFirst = async () => {
     const code = query.trim();
     if (!code) return;
+    if (firstCache.current.get(code)) {
+      setShowSecond(true);
+      return;
+    }
+    if (checking.current === code) return;
+    checking.current = code;
     const { data } = await supabase.rpc("verify_passport_first", { code });
+    checking.current = null;
+    firstCache.current.set(code, data === true);
     if (data === true) setShowSecond(true);
   };
+
+  // Auto-check while typing (debounced) so the second passport popup opens
+  // the instant the first code is complete — no Enter / key tap needed.
+  useEffect(() => {
+    if (showSecond) return;
+    const code = query.trim();
+    if (code.length < 3) return;
+    const t = setTimeout(() => { void checkFirst(); }, 120);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, showSecond]);
 
   const validate = async () => {
     const code1 = query.trim();
     const code2 = second.trim();
-    if (!code1 || !code2) return;
+    if (!code1 || !code2 || busy) return;
+    setBusy(true);
     const { data } = await supabase.rpc("verify_passport_both", { code1, code2 });
+    setBusy(false);
     if (data === true) {
       grantAccess();
       setEntering(true);
     }
   };
+
+  // Validate as soon as the second code is correct, so tapping VALIDATE (or
+  // even just finishing typing) reacts immediately.
+  useEffect(() => {
+    if (!showSecond) return;
+    const code2 = second.trim();
+    if (code2.length < 3 || entering) return;
+    const t = setTimeout(() => { void validate(); }, 150);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [second, showSecond, entering]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-[#0a0a0f]/95 px-4 pt-16 backdrop-blur-lg">
@@ -88,9 +125,10 @@ export function PassportSearch({ onClose }: { onClose: () => void }) {
             />
             <button
               onClick={validate}
-              className="w-full rounded-xl bg-gradient-to-r from-[#e6c76a] via-[#c9a84c] to-[#8a6b1f] py-2 font-heading text-sm font-semibold tracking-widest text-[#1a1408] shadow-[0_0_18px_rgba(201,168,76,0.5)]"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#e6c76a] via-[#c9a84c] to-[#8a6b1f] py-2 font-heading text-sm font-semibold tracking-widest text-[#1a1408] shadow-[0_0_18px_rgba(201,168,76,0.5)]"
             >
-              VALIDATE
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+              {busy ? "VALIDATING…" : "VALIDATE"}
             </button>
           </div>
         )}
