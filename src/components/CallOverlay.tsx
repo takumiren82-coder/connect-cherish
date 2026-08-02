@@ -145,7 +145,7 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
     channel
       .on("broadcast", { event: "answer" }, async ({ payload }) => {
         if (payload.from === myId) return;
-        if (!pc.currentRemoteDescription) {
+        if (pc.signalingState === "have-local-offer") {
           await pc.setRemoteDescription(new RTCSessionDescription(payload.answer));
           setPhase("connecting");
           await applyPendingRemote();
@@ -198,12 +198,26 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
         // Announce readiness so the peer can (re)flush its buffered ICE.
         channel.send({ type: "broadcast", event: "hello", payload: { from: myId } });
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-            video: video ? { facingMode: "user" } : false,
-          });
+          let stream: MediaStream;
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+              video: video ? { facingMode: "user" } : false,
+            });
+          } catch {
+            // Camera busy/denied → still join with audio so the call works.
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          }
           localStreamRef.current = stream;
-          stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+          // Attach to the pre-created transceivers so our media is always
+          // actually sent (addTrack alone can land on a recvonly m-line).
+          for (const t of stream.getTracks()) {
+            const sender = pc.getTransceivers().find(
+              (tr) => tr.receiver.track?.kind === t.kind && !tr.sender.track,
+            )?.sender;
+            if (sender) await sender.replaceTrack(t);
+            else pc.addTrack(t, stream);
+          }
           if (video && localVideoRef.current) localVideoRef.current.srcObject = stream;
 
           if (mode === "outgoing") {
