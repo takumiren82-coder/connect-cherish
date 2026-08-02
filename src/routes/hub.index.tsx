@@ -36,6 +36,8 @@ import {
 } from "@/lib/msg-meta";
 import { MessageActionSheet } from "@/components/MessageActionSheet";
 import { AvatarPicker } from "@/components/AvatarPicker";
+import { Buffering } from "@/components/Buffering";
+import { readMsgCache, writeMsgCache } from "@/lib/msg-cache";
 import { buildPartnerSeenSet, buildSeenSet, encodeSeen, isSeenMark } from "@/lib/seen";
 import { isCoverEnabled, setCoverEnabled } from "@/lib/cover";
 
@@ -162,6 +164,8 @@ function PrivateHub() {
   const [searchText, setSearchText] = useState("");
   const [fabOpen, setFabOpen] = useState(false);
   const [coverOn, setCoverOn] = useState(true);
+  // True only while the first (uncached) transcript fetch is in flight.
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
   // Always-fresh copy of my own name for the presence payload, so the
   // realtime channel doesn't need to resubscribe when the name loads.
   const nameRef = useRef<string>("");
@@ -222,13 +226,26 @@ function PrivateHub() {
   useEffect(() => {
     if (!room) return;
     let live = true;
+    // Paint the cached transcript immediately (no blank list on re-entry).
+    const cached = readMsgCache<Message>(room);
+    if (cached.length) {
+      setMessages(cached);
+      setLoadingMsgs(false);
+    } else {
+      setLoadingMsgs(true);
+    }
     (async () => {
       const { data } = await supabase
         .from("messages")
         .select("*")
         .eq("room_code", room)
         .order("created_at", { ascending: true });
-      if (live && data) setMessages(data as Message[]);
+      if (!live) return;
+      if (data) {
+        setMessages(data as Message[]);
+        writeMsgCache(room, data as Message[]);
+      }
+      setLoadingMsgs(false);
     })();
 
     const channel = supabase
@@ -288,6 +305,11 @@ function PrivateHub() {
       supabase.removeChannel(channel);
     };
   }, [room, myId]);
+
+  // Keep the local cache warm on every realtime change.
+  useEffect(() => {
+    if (room && messages.length) writeMsgCache(room, messages);
+  }, [room, messages]);
 
   // announce presence + name once per room
   useEffect(() => {
@@ -1069,6 +1091,7 @@ function PrivateHub() {
           : "Offline";
   return (
     <div className="hub-chat-bg flex h-[100dvh] w-screen flex-col overflow-hidden">
+      <Buffering active={loadingMsgs} label="Syncing messages…" />
       <header className="flex shrink-0 items-center gap-2.5 border-b border-border/60 bg-background/70 px-3 py-1.5 backdrop-blur-xl">
         <button onClick={backToInbox} className="text-gold" aria-label="Back">
           <ArrowLeft className="h-4 w-4" />

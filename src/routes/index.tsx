@@ -39,7 +39,12 @@ function Home() {
   const [bypass, setBypass] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [featIdx, setFeatIdx] = useState(0);
+  // Computed after mount only — the server's clock/timezone differs from the
+  // device's and would otherwise cause a hydration mismatch.
+  const [greeting, setGreeting] = useState("Welcome");
   const featured = books.slice(0, 3);
+
+  useEffect(() => setGreeting(getGreeting()), []);
 
   // If the user turned the novel cover OFF on this device, skip the public
   // site entirely and open the private hub directly.
@@ -89,7 +94,7 @@ function Home() {
       <section className="relative z-10 flex items-start justify-between px-4 pt-4">
         <div>
           <h2 className="font-heading text-2xl font-bold text-neutral-50">
-            {getGreeting()},{" "}
+            {greeting},{" "}
             <span className="text-[#c9a84c]">{displayName(user)}</span>{" "}
             <Sparkles className="inline h-5 w-5 -translate-y-1 text-[#c9a84c]" />
           </h2>
