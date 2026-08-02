@@ -222,13 +222,26 @@ function PrivateHub() {
   useEffect(() => {
     if (!room) return;
     let live = true;
+    // Paint the cached transcript immediately (no blank list on re-entry).
+    const cached = readMsgCache<Message>(room);
+    if (cached.length) {
+      setMessages(cached);
+      setLoadingMsgs(false);
+    } else {
+      setLoadingMsgs(true);
+    }
     (async () => {
       const { data } = await supabase
         .from("messages")
         .select("*")
         .eq("room_code", room)
         .order("created_at", { ascending: true });
-      if (live && data) setMessages(data as Message[]);
+      if (!live) return;
+      if (data) {
+        setMessages(data as Message[]);
+        writeMsgCache(room, data as Message[]);
+      }
+      setLoadingMsgs(false);
     })();
 
     const channel = supabase
