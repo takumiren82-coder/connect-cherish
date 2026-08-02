@@ -306,6 +306,11 @@ function PrivateHub() {
     };
   }, [room, myId]);
 
+  // Keep the local cache warm on every realtime change.
+  useEffect(() => {
+    if (room && messages.length) writeMsgCache(room, messages);
+  }, [room, messages]);
+
   // announce presence + name once per room
   useEffect(() => {
     if (!room || !name) return;
