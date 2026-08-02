@@ -77,6 +77,12 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
   // Buffered remote ICE candidates that arrived before pc.setRemoteDescription.
   const pendingRemote = useRef<RTCIceCandidateInit[]>([]);
   const peerReady = useRef(false);
+  // Kept so we can re-broadcast the SDP if the peer joined the signalling
+  // channel late (Supabase broadcast is fire-and-forget → lost packets are
+  // the usual cause of "they hear me but I don't hear them").
+  const myOffer = useRef<RTCSessionDescriptionInit | null>(null);
+  const myAnswer = useRef<RTCSessionDescriptionInit | null>(null);
+  const negotiated = useRef(false);
 
   const flushLocalIce = () => {
     const ch = chRef.current;
@@ -101,12 +107,32 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
 
     const pc = new RTCPeerConnection(RTC_CFG);
     pcRef.current = pc;
+    // Always declare both directions up front so the SDP carries a sendrecv
+    // m-line for audio (and video) even if a track is added a moment later.
+    try {
+      pc.addTransceiver("audio", { direction: "sendrecv" });
+      if (video) pc.addTransceiver("video", { direction: "sendrecv" });
+    } catch { /* older browsers */ }
     pc.ontrack = (e) => {
       const stream = e.streams[0];
       remoteStreamRef.current = stream;
       if (remoteAudioRef.current) remoteAudioRef.current.srcObject = stream;
       if (remoteVideoRef.current) remoteVideoRef.current.srcObject = stream;
       setPhase("in-call");
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === "connected") negotiated.current = true;
+      if (pc.connectionState === "failed") {
+        // Renegotiate with an ICE restart instead of dying one-way.
+        void (async () => {
+          try {
+            const offer = await pc.createOffer({ iceRestart: true });
+            await pc.setLocalDescription(offer);
+            myOffer.current = offer;
+            channel.send({ type: "broadcast", event: "offer", payload: { from: myId, offer, peerName, video } });
+          } catch { /* ignore */ }
+        })();
+      }
     };
     pc.onicecandidate = (e) => {
       if (e.candidate) {
@@ -127,12 +153,30 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
           if (!peerReady.current) { peerReady.current = true; flushLocalIce(); }
         }
       })
+      .on("broadcast", { event: "offer" }, async ({ payload }) => {
+        // A re-offer (ICE restart / late join) for the callee side.
+        if (payload.from === myId || mode === "outgoing") return;
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          myAnswer.current = answer;
+          channel.send({ type: "broadcast", event: "answer", payload: { from: myId, answer } });
+          await applyPendingRemote();
+        } catch { /* ignore */ }
+      })
       .on("broadcast", { event: "hello" }, ({ payload }) => {
         if (payload.from === myId) return;
-        if (peerReady.current) return;
         peerReady.current = true;
         // Peer just subscribed. Re-send any ICE candidates we already emitted.
         flushLocalIce();
+        // …and the SDP, in case the first broadcast was sent before they
+        // were listening. Without this the peer never gets our media.
+        if (myOffer.current) {
+          channel.send({ type: "broadcast", event: "offer", payload: { from: myId, offer: myOffer.current, peerName, video } });
+        } else if (myAnswer.current) {
+          channel.send({ type: "broadcast", event: "answer", payload: { from: myId, answer: myAnswer.current } });
+        }
       })
       .on("broadcast", { event: "ice" }, async ({ payload }) => {
         if (payload.from === myId) return;
@@ -165,11 +209,13 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
           if (mode === "outgoing") {
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
+            myOffer.current = offer;
             channel.send({ type: "broadcast", event: "offer", payload: { from: myId, offer, peerName, video } });
           } else if (incomingOffer) {
             await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
+            myAnswer.current = answer;
             channel.send({ type: "broadcast", event: "answer", payload: { from: myId, answer } });
             setPhase("connecting");
             await applyPendingRemote();
@@ -180,7 +226,21 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
         }
       });
 
+    // Keep re-announcing until the peer connection is actually up, so a slow
+    // network or a late-joining peer can still complete the handshake.
+    const retry = setInterval(() => {
+      if (negotiated.current || pc.connectionState === "connected") return;
+      channel.send({ type: "broadcast", event: "hello", payload: { from: myId } });
+      if (myOffer.current) {
+        channel.send({ type: "broadcast", event: "offer", payload: { from: myId, offer: myOffer.current, peerName, video } });
+      } else if (myAnswer.current) {
+        channel.send({ type: "broadcast", event: "answer", payload: { from: myId, answer: myAnswer.current } });
+      }
+      flushLocalIce();
+    }, 1500);
+
     return () => {
+      clearInterval(retry);
       pc.close();
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       supabase.removeChannel(channel);
