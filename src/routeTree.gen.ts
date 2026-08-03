@@ -17,6 +17,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as HubIndexRouteImport } from './routes/hub.index'
 import { Route as ReaderIdRouteImport } from './routes/reader.$id'
+import { Route as HubWatchRouteImport } from './routes/hub.watch'
 import { Route as HubStatusRouteImport } from './routes/hub.status'
 import { Route as HubReelsRouteImport } from './routes/hub.reels'
 import { Route as HubGalleryRouteImport } from './routes/hub.gallery'
@@ -64,6 +65,11 @@ const ReaderIdRoute = ReaderIdRouteImport.update({
   path: '/reader/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HubWatchRoute = HubWatchRouteImport.update({
+  id: '/watch',
+  path: '/watch',
+  getParentRoute: () => HubRoute,
+} as any)
 const HubStatusRoute = HubStatusRouteImport.update({
   id: '/status',
   path: '/status',
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/hub/gallery': typeof HubGalleryRoute
   '/hub/reels': typeof HubReelsRoute
   '/hub/status': typeof HubStatusRoute
+  '/hub/watch': typeof HubWatchRoute
   '/reader/$id': typeof ReaderIdRoute
   '/hub/': typeof HubIndexRoute
   '/hub/chat/$id': typeof HubChatIdRoute
@@ -121,6 +128,7 @@ export interface FileRoutesByTo {
   '/hub/gallery': typeof HubGalleryRoute
   '/hub/reels': typeof HubReelsRoute
   '/hub/status': typeof HubStatusRoute
+  '/hub/watch': typeof HubWatchRoute
   '/reader/$id': typeof ReaderIdRoute
   '/hub': typeof HubIndexRoute
   '/hub/chat/$id': typeof HubChatIdRoute
@@ -138,6 +146,7 @@ export interface FileRoutesById {
   '/hub/gallery': typeof HubGalleryRoute
   '/hub/reels': typeof HubReelsRoute
   '/hub/status': typeof HubStatusRoute
+  '/hub/watch': typeof HubWatchRoute
   '/reader/$id': typeof ReaderIdRoute
   '/hub/': typeof HubIndexRoute
   '/hub/chat/$id': typeof HubChatIdRoute
@@ -156,6 +165,7 @@ export interface FileRouteTypes {
     | '/hub/gallery'
     | '/hub/reels'
     | '/hub/status'
+    | '/hub/watch'
     | '/reader/$id'
     | '/hub/'
     | '/hub/chat/$id'
@@ -171,6 +181,7 @@ export interface FileRouteTypes {
     | '/hub/gallery'
     | '/hub/reels'
     | '/hub/status'
+    | '/hub/watch'
     | '/reader/$id'
     | '/hub'
     | '/hub/chat/$id'
@@ -187,6 +198,7 @@ export interface FileRouteTypes {
     | '/hub/gallery'
     | '/hub/reels'
     | '/hub/status'
+    | '/hub/watch'
     | '/reader/$id'
     | '/hub/'
     | '/hub/chat/$id'
@@ -263,6 +275,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReaderIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/hub/watch': {
+      id: '/hub/watch'
+      path: '/watch'
+      fullPath: '/hub/watch'
+      preLoaderRoute: typeof HubWatchRouteImport
+      parentRoute: typeof HubRoute
+    }
     '/hub/status': {
       id: '/hub/status'
       path: '/status'
@@ -312,6 +331,7 @@ interface HubRouteChildren {
   HubGalleryRoute: typeof HubGalleryRoute
   HubReelsRoute: typeof HubReelsRoute
   HubStatusRoute: typeof HubStatusRoute
+  HubWatchRoute: typeof HubWatchRoute
   HubIndexRoute: typeof HubIndexRoute
   HubChatIdRoute: typeof HubChatIdRoute
 }
@@ -320,6 +340,7 @@ const HubRouteChildren: HubRouteChildren = {
   HubGalleryRoute: HubGalleryRoute,
   HubReelsRoute: HubReelsRoute,
   HubStatusRoute: HubStatusRoute,
+  HubWatchRoute: HubWatchRoute,
   HubIndexRoute: HubIndexRoute,
   HubChatIdRoute: HubChatIdRoute,
 }
@@ -340,13 +361,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
