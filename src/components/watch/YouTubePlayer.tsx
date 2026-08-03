@@ -1,3 +1,4 @@
+/// <reference types="youtube" />
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 // Thin wrapper around the official YouTube IFrame Player API.
