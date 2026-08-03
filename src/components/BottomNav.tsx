@@ -1,13 +1,18 @@
 import { Link } from "@tanstack/react-router";
-import { Images, MessageCircle, Clapperboard, CircleDashed } from "lucide-react";
+import { Images, MessageCircle, Clapperboard, CircleDashed, MonitorPlay } from "lucide-react";
 import { useUnreadCount } from "@/hooks/useUnreadCount";
 
-export function BottomNav({ active }: { active: "gallery" | "chats" | "reels" | "status" }) {
+export function BottomNav({
+  active,
+}: {
+  active: "gallery" | "chats" | "reels" | "status" | "watch";
+}) {
   const unread = useUnreadCount();
   const items = [
     { key: "gallery", label: "Gallery", to: "/hub/gallery", Icon: Images },
     { key: "status", label: "Status", to: "/hub/status", Icon: CircleDashed },
     { key: "chats", label: "Chat", to: "/hub", Icon: MessageCircle },
+    { key: "watch", label: "Watch", to: "/hub/watch", Icon: MonitorPlay },
     { key: "reels", label: "Reels", to: "/hub/reels", Icon: Clapperboard },
   ] as const;
   return (
