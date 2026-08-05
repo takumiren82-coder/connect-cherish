@@ -44,7 +44,7 @@ import {
   type WatchVideo,
 } from "@/lib/watch";
 
-export const Route = createFileRoute("/hub/watch/$code")({
+export const Route = createFileRoute("/hub/watch_/$code")({
   component: WatchRoom,
   head: () => ({
     meta: [
@@ -103,6 +103,8 @@ function WatchRoom() {
   const [dur, setDur] = useState(0);
   const [hand, setHand] = useState(false);
   const [theater, setTheater] = useState(false);
+  const [showCtl, setShowCtl] = useState(true);
+  const [ytError, setYtError] = useState<number | null>(null);
   const [needsTap, setNeedsTap] = useState(true);
   const [invite, setInvite] = useState(false);
   const [hostPanel, setHostPanel] = useState(false);
@@ -113,6 +115,8 @@ function WatchRoom() {
   const [typingFrom, setTypingFrom] = useState<string>("");
 
   const player = useRef<YtHandle>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const ctlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const readyRef = useRef(false);
   const applyingRef = useRef(false);
@@ -295,6 +299,60 @@ function WatchRoom() {
 
   const canControl = isHost || !settings.hostOnlyPlay;
 
+  const bumpCtl = useCallback(() => {
+    setShowCtl(true);
+    if (ctlTimer.current) clearTimeout(ctlTimer.current);
+    ctlTimer.current = setTimeout(() => setShowCtl(false), 2400);
+  }, []);
+
+  useEffect(() => {
+    bumpCtl();
+    return () => {
+      if (ctlTimer.current) clearTimeout(ctlTimer.current);
+    };
+  }, [bumpCtl]);
+
+  useEffect(() => setYtError(null), [video?.id]);
+
+  // real fullscreen + landscape rotation, like YouTube
+  const enterFs = useCallback(async () => {
+    const el = shellRef.current;
+    setTheater(true);
+    bumpCtl();
+    try {
+      await el?.requestFullscreen?.();
+    } catch {
+      /* ignore */
+    }
+    try {
+      await (
+        screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }
+      ).lock?.("landscape");
+    } catch {
+      /* desktop / unsupported */
+    }
+  }, [bumpCtl]);
+
+  const exitFs = useCallback(async () => {
+    try {
+      (screen.orientation as ScreenOrientation & { unlock?: () => void }).unlock?.();
+    } catch {
+      /* ignore */
+    }
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+    } catch {
+      /* ignore */
+    }
+    setTheater(false);
+  }, []);
+
+  useEffect(() => {
+    const h = () => setTheater(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", h);
+    return () => document.removeEventListener("fullscreenchange", h);
+  }, []);
+
   const togglePlay = () => {
     const p = player.current;
     if (!p || !canControl) return;
@@ -406,7 +464,7 @@ function WatchRoom() {
             <p className="truncate font-heading text-[15.5px] font-semibold">{settings.name} 🍿</p>
             <p className="text-[11.5px] text-neutral-500">{members.length || 1} members</p>
           </div>
-          <button onClick={() => setTheater(true)} className="text-neutral-300">
+          <button onClick={() => void enterFs()} className="text-neutral-300">
             <Maximize2 className="h-[18px] w-[18px]" />
           </button>
           <button onClick={() => setHostPanel(true)} className="text-neutral-300">
@@ -416,7 +474,10 @@ function WatchRoom() {
       )}
 
       {/* player */}
-      <div className={`relative bg-black ${theater ? "flex-1" : ""}`}>
+      <div
+        ref={shellRef}
+        className={`relative bg-black ${theater ? "flex h-full w-full flex-1 items-center justify-center" : ""}`}
+      >
         <div className={`relative w-full ${theater ? "h-full" : "aspect-video"}`}>
           {video ? (
             <YouTubePlayer
@@ -424,6 +485,7 @@ function WatchRoom() {
               videoId={video.id}
               onReady={onPlayerReady}
               onStateChange={onPlayerState}
+              onError={(c) => setYtError(c)}
               className="h-full w-full"
             />
           ) : (
@@ -433,8 +495,11 @@ function WatchRoom() {
             </div>
           )}
 
-          {/* transparent shield: taps go to our own controls, not YouTube's */}
-          <div className="absolute inset-0" onClick={togglePlay} />
+          {/* transparent shield: taps toggle our own controls, not YouTube's */}
+          <div
+            className="absolute inset-0"
+            onClick={() => (showCtl ? setShowCtl(false) : bumpCtl())}
+          />
 
           {/* floating reactions */}
           <div className="pointer-events-none absolute bottom-14 right-4 flex flex-col-reverse gap-1">
@@ -445,55 +510,115 @@ function WatchRoom() {
             ))}
           </div>
 
-          {/* center controls */}
+          {/* auto-hiding overlay: center controls + rotate + progress line */}
           {video && !needsTap && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-8">
+            <div
+              className={`pointer-events-none absolute inset-0 transition-opacity duration-200 ${
+                showCtl ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              <div className="absolute inset-0 flex items-center justify-center gap-8">
+                <button
+                  onClick={() => {
+                    bumpCtl();
+                    skip(-10);
+                  }}
+                  className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-white disabled:opacity-30"
+                  disabled={!canControl || !showCtl}
+                >
+                  <RotateCcw className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => {
+                    bumpCtl();
+                    togglePlay();
+                  }}
+                  className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white disabled:opacity-30"
+                  disabled={!canControl || !showCtl}
+                >
+                  {playing ? (
+                    <Pause className="h-7 w-7" />
+                  ) : (
+                    <Play className="h-7 w-7 fill-current" />
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    bumpCtl();
+                    skip(10);
+                  }}
+                  className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-white disabled:opacity-30"
+                  disabled={!canControl || !showCtl}
+                >
+                  <RotateCw className="h-5 w-5" />
+                </button>
+              </div>
+
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  skip(-10);
-                }}
-                className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-white disabled:opacity-30"
-                disabled={!canControl}
+                onClick={() => void (theater ? exitFs() : enterFs())}
+                disabled={!showCtl}
+                className="pointer-events-auto absolute bottom-2 right-2 rounded-full bg-black/60 p-2 text-white"
               >
-                <RotateCcw className="h-5 w-5" />
+                {theater ? (
+                  <Minimize2 className="h-[18px] w-[18px]" />
+                ) : (
+                  <Maximize2 className="h-[18px] w-[18px]" />
+                )}
               </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  togglePlay();
-                }}
-                className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white disabled:opacity-30"
-                disabled={!canControl}
-              >
-                {playing ? <Pause className="h-7 w-7" /> : <Play className="h-7 w-7 fill-current" />}
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  skip(10);
-                }}
-                className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-white disabled:opacity-30"
-                disabled={!canControl}
-              >
-                <RotateCw className="h-5 w-5" />
-              </button>
+
+              {/* our single play line — YouTube's own bar is disabled */}
+              <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/85 to-transparent px-3 pb-2.5 pt-6">
+                <span className="w-11 text-right text-[10.5px] tabular-nums text-neutral-300">
+                  {fmtTime(cur)}
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={Math.max(dur, 1)}
+                  value={Math.min(cur, dur || 1)}
+                  onChange={(e) => {
+                    bumpCtl();
+                    scrub(e);
+                  }}
+                  disabled={!canControl || !showCtl}
+                  className="h-1 flex-1 appearance-none rounded-full accent-[var(--primary)]"
+                  style={{
+                    background: `linear-gradient(to right, var(--primary) ${
+                      (cur / (dur || 1)) * 100
+                    }%, rgba(255,255,255,.25) 0%)`,
+                  }}
+                />
+                <span className="w-14 text-[10.5px] tabular-nums text-neutral-300">
+                  {fmtTime(dur)}
+                </span>
+              </div>
             </div>
           )}
 
-          {theater && (
-            <button
-              onClick={() => setTheater(false)}
-              className="absolute right-3 top-3 rounded-full bg-black/60 p-2 text-white"
-            >
-              <Minimize2 className="h-4.5 w-4.5" />
-            </button>
+          {ytError !== null && video && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/85 px-6 text-center">
+              <p className="text-[13.5px] font-semibold">This video can't be embedded</p>
+              <p className="text-[11.5px] text-neutral-400">
+                The owner blocked outside playback. Pick another video from search.
+              </p>
+              <a
+                href={`https://www.youtube.com/watch?v=${video.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 rounded-full border border-primary/50 px-4 py-1.5 text-[12.5px] text-primary"
+              >
+                Open on YouTube
+              </a>
+            </div>
           )}
 
           {/* tap-to-start (browsers block autoplay with sound) */}
           {needsTap && (
             <button
-              onClick={startWatching}
+              onClick={() => {
+                startWatching();
+                bumpCtl();
+              }}
               className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/75 backdrop-blur-sm"
             >
               <span className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-primary shadow-[0_0_40px_-8px_var(--primary)]">
@@ -503,24 +628,6 @@ function WatchRoom() {
               <span className="text-[11.5px] text-neutral-400">You'll be synced to everyone else</span>
             </button>
           )}
-        </div>
-
-        {/* progress */}
-        <div className="flex items-center gap-2 bg-black px-3 pb-2 pt-1">
-          <span className="w-11 text-right text-[10.5px] tabular-nums text-neutral-400">{fmtTime(cur)}</span>
-          <input
-            type="range"
-            min={0}
-            max={Math.max(dur, 1)}
-            value={Math.min(cur, dur || 1)}
-            onChange={scrub}
-            disabled={!canControl}
-            className="h-1 flex-1 appearance-none rounded-full bg-neutral-700 accent-[var(--primary)]"
-            style={{
-              background: `linear-gradient(to right, var(--primary) ${(cur / (dur || 1)) * 100}%, #2a2a2a 0%)`,
-            }}
-          />
-          <span className="w-11 text-[10.5px] tabular-nums text-neutral-400">{fmtTime(dur)}</span>
         </div>
       </div>
 
@@ -541,7 +648,7 @@ function WatchRoom() {
               label="Speaker"
               onClick={voice.toggleSpeaker}
             />
-            <CtrlBtn Icon={MonitorPlay} label="Screen" onClick={() => setTheater(true)} />
+            <CtrlBtn Icon={MonitorPlay} label="Screen" onClick={() => void enterFs()} />
             <CtrlBtn Icon={Heart} label="React" onClick={() => react("❤️")} />
             <CtrlBtn danger Icon={X} label="Leave" onClick={leave} />
           </div>
