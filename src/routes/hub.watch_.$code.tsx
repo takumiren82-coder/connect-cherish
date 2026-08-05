@@ -474,7 +474,10 @@ function WatchRoom() {
       )}
 
       {/* player */}
-      <div ref={shellRef} className={`relative bg-black ${theater ? "flex-1" : ""}`}>
+      <div
+        ref={shellRef}
+        className={`relative bg-black ${theater ? "flex h-full w-full flex-1 items-center justify-center" : ""}`}
+      >
         <div className={`relative w-full ${theater ? "h-full" : "aspect-video"}`}>
           {video ? (
             <YouTubePlayer
@@ -645,7 +648,7 @@ function WatchRoom() {
               label="Speaker"
               onClick={voice.toggleSpeaker}
             />
-            <CtrlBtn Icon={MonitorPlay} label="Screen" onClick={() => setTheater(true)} />
+            <CtrlBtn Icon={MonitorPlay} label="Screen" onClick={() => void enterFs()} />
             <CtrlBtn Icon={Heart} label="React" onClick={() => react("❤️")} />
             <CtrlBtn danger Icon={X} label="Leave" onClick={leave} />
           </div>
