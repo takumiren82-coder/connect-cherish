@@ -29,6 +29,7 @@ interface Props {
   onReady?: () => void;
   /** 1 = playing, 2 = paused, 0 = ended, 3 = buffering */
   onStateChange?: (state: number) => void;
+  onError?: (code: number) => void;
   className?: string;
 }
 
@@ -53,7 +54,7 @@ function loadApi(): Promise<void> {
 }
 
 export const YouTubePlayer = forwardRef<YtHandle, Props>(function YouTubePlayer(
-  { videoId, onReady, onStateChange, className },
+  { videoId, onReady, onStateChange, onError, className },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -61,8 +62,10 @@ export const YouTubePlayer = forwardRef<YtHandle, Props>(function YouTubePlayer(
   const [ready, setReady] = useState(false);
   const cbReady = useRef(onReady);
   const cbState = useRef(onStateChange);
+  const cbError = useRef(onError);
   cbReady.current = onReady;
   cbState.current = onStateChange;
+  cbError.current = onError;
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +81,8 @@ export const YouTubePlayer = forwardRef<YtHandle, Props>(function YouTubePlayer(
           disablekb: 1,
           iv_load_policy: 3,
           fs: 0,
+          enablejsapi: 1,
+          origin: window.location.origin,
         },
         events: {
           onReady: () => {
@@ -85,6 +90,7 @@ export const YouTubePlayer = forwardRef<YtHandle, Props>(function YouTubePlayer(
             cbReady.current?.();
           },
           onStateChange: (e: YT.OnStateChangeEvent) => cbState.current?.(e.data as number),
+          onError: (e: { data: number }) => cbError.current?.(e.data),
         },
       });
     });

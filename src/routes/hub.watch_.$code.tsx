@@ -44,7 +44,7 @@ import {
   type WatchVideo,
 } from "@/lib/watch";
 
-export const Route = createFileRoute("/hub/watch/$code")({
+export const Route = createFileRoute("/hub/watch_/$code")({
   component: WatchRoom,
   head: () => ({
     meta: [
