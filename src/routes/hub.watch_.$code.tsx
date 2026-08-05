@@ -103,6 +103,8 @@ function WatchRoom() {
   const [dur, setDur] = useState(0);
   const [hand, setHand] = useState(false);
   const [theater, setTheater] = useState(false);
+  const [showCtl, setShowCtl] = useState(true);
+  const [ytError, setYtError] = useState<number | null>(null);
   const [needsTap, setNeedsTap] = useState(true);
   const [invite, setInvite] = useState(false);
   const [hostPanel, setHostPanel] = useState(false);
@@ -113,6 +115,8 @@ function WatchRoom() {
   const [typingFrom, setTypingFrom] = useState<string>("");
 
   const player = useRef<YtHandle>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const ctlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const readyRef = useRef(false);
   const applyingRef = useRef(false);
