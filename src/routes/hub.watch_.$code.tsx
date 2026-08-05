@@ -299,6 +299,60 @@ function WatchRoom() {
 
   const canControl = isHost || !settings.hostOnlyPlay;
 
+  const bumpCtl = useCallback(() => {
+    setShowCtl(true);
+    if (ctlTimer.current) clearTimeout(ctlTimer.current);
+    ctlTimer.current = setTimeout(() => setShowCtl(false), 2400);
+  }, []);
+
+  useEffect(() => {
+    bumpCtl();
+    return () => {
+      if (ctlTimer.current) clearTimeout(ctlTimer.current);
+    };
+  }, [bumpCtl]);
+
+  useEffect(() => setYtError(null), [video?.id]);
+
+  // real fullscreen + landscape rotation, like YouTube
+  const enterFs = useCallback(async () => {
+    const el = shellRef.current;
+    setTheater(true);
+    bumpCtl();
+    try {
+      await el?.requestFullscreen?.();
+    } catch {
+      /* ignore */
+    }
+    try {
+      await (
+        screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }
+      ).lock?.("landscape");
+    } catch {
+      /* desktop / unsupported */
+    }
+  }, [bumpCtl]);
+
+  const exitFs = useCallback(async () => {
+    try {
+      (screen.orientation as ScreenOrientation & { unlock?: () => void }).unlock?.();
+    } catch {
+      /* ignore */
+    }
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+    } catch {
+      /* ignore */
+    }
+    setTheater(false);
+  }, []);
+
+  useEffect(() => {
+    const h = () => setTheater(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", h);
+    return () => document.removeEventListener("fullscreenchange", h);
+  }, []);
+
   const togglePlay = () => {
     const p = player.current;
     if (!p || !canControl) return;
